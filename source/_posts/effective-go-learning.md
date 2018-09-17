@@ -207,6 +207,6 @@ func Sum(a *[3]float64) (sum float64) {
         return
     }
 
-    array := [...]float64{7.0, 8.5, 9.1}
-    x := Sum(&array) // Note the explicit address-of operator
+array := [...]float64{7.0, 8.5, 9.1}
+x := Sum(&array) // Note the explicit address-of operator
 ```
