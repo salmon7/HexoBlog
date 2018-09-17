@@ -19,7 +19,9 @@ tags:
 使用java对应的接口查询目前的ip，包括wifi的ip和移动数据网络的ip，不一定每次能够查到所有的ip，与系统是否开启wifi、是否开启移动网络等相关。
 
 ```java
-    public static String getIPAddress() {
+    public static List<String> getIPAddress() {
+
+        ArrayList<String> iplist = new ArrayList<String>();
         try {
             //Enumeration<NetworkInterface> en=NetworkInterface.getNetworkInterfaces();
             for (Enumeration<NetworkInterface> en = NetworkInterface.getNetworkInterfaces(); en.hasMoreElements(); ) {
@@ -27,14 +29,16 @@ tags:
                 for (Enumeration<InetAddress> enumIpAddr = intf.getInetAddresses(); enumIpAddr.hasMoreElements(); ) {
                     InetAddress inetAddress = enumIpAddr.nextElement();
                     if (!inetAddress.isLoopbackAddress() && inetAddress instanceof Inet4Address) {
-                        return inetAddress.getHostAddress();
+                        Log.d(MainActivity.class.getName(), "ip is: " + inetAddress.getHostAddress());
+                        iplist.add(inetAddress.getHostAddress());
                     }
                 }
             }
         } catch (SocketException e) {
             e.printStackTrace();
         }
-        return null;
+
+        return iplist;
     }
     
 ```
