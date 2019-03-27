@@ -1,5 +1,5 @@
 ---
-title: gitlab ci && docker-compose中容器启动环境变量传递问题
+title: gitlab ci && docker-compose(5)-容器启动环境变量传递
 date: 2018-09-25 00:39:50
 tags:
     - docker
@@ -7,7 +7,7 @@ tags:
 ---
 
 
-## docker run和docker-compose启动容器环境变量传递问题
+## docker run和docker-compose启动容器环境变量传递
 
 ### dockrfile中的ENV和CMD的关系（不考虑ENTRYPOINT）
 

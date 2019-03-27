@@ -1,5 +1,5 @@
 ---
-title: gitlab ci && docker-compose中容器启动先后顺序问题
+title: gitlab ci && docker-compose(6)-容器启动先后顺序
 date: 2018-09-26 01:27:33
 tags:
     - docker
@@ -64,8 +64,10 @@ services:
 
 参考：
 
-mysql官方docker说明 https://hub.docker.com/_/mysql/
+mysql官方docker说明：https://hub.docker.com/_/mysql/
 
-Control startup order in Compose https://docs.docker.com/compose/startup-order/
+Control startup order in Compose：https://docs.docker.com/compose/startup-order/
 
-vishnubob/wait-for-it https://github.com/vishnubob/wait-for-it
+vishnubob/wait-for-it：https://github.com/vishnubob/wait-for-it
+
+Docker-compose check if mysql connection is ready：https://stackoverflow.com/questions/42567475/docker-compose-check-if-mysql-connection-is-ready

@@ -1,5 +1,5 @@
 ---
-title: gitlab ci && docker-compose中mysql的添加权限
+title: gitlab ci && docker-compose(4)-mysql的添加权限
 date: 2018-09-20 01:37:27
 tags:
     - docker

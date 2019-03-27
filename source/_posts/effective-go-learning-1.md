@@ -210,3 +210,26 @@ func Sum(a *[3]float64) (sum float64) {
 array := [...]float64{7.0, 8.5, 9.1}
 x := Sum(&array) // Note the explicit address-of operator
 ```
+
+### Slice:
+
+* 在go中，slice使用远远比array使用广泛。slice 持有对底层数组的引用，当一个切片赋值给另一个时，将会持有相同数组的引用。
+* 如果函数采用slice参数，则对切片元素所做的更改将对调用者可见，类似于将指针传递给基础数组。有疑问
+* 对于slice，经常需要Append配合使用，Append实现如下。之后我们必须返回切片，因为虽然Append可以修改切片的元素，但切片本身（运行时的数据结构包含指针，长度和容量）是按值传递的。
+
+
+```go
+func Append(slice, data []byte) []byte {
+    l := len(slice)
+    if l + len(data) > cap(slice) {  // reallocate
+        // Allocate double what's needed, for future growth.
+        newSlice := make([]byte, (l+len(data))*2)
+        // The copy function is predeclared and works for any slice type.
+        copy(newSlice, slice)
+        slice = newSlice
+    }
+    slice = slice[0:l+len(data)]
+    copy(slice[l:], data)
+    return slice
+}
+```

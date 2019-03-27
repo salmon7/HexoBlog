@@ -1,5 +1,5 @@
 ---
-title: gitlab ci && docker-compose中mysql的初始化
+title: gitlab ci && docker-compose(3)-mysql的初始化
 date: 2018-09-18 23:19:20
 tags:
     - docker
