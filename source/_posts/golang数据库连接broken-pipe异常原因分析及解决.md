@@ -2,6 +2,8 @@
 title: golang数据库连接broken pipe异常原因分析及解决
 date: 2019-11-10 21:57:03
 tags:
+    - go
+    - mysql
 ---
 
 > 在golang开发中，在使用mysql数据库时一般使用数据库驱动包为 go-sql-driver/mysql，该包是按照go官方包database/sql定义规范实现的。我们线上的程序偶尔会在标准错误输出 "broken pip"，为了究其原因做了些调研，并给出了解决方法。
