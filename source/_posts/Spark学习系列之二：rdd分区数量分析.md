@@ -11,7 +11,6 @@ tags:
 
 ## 通过parallelize创建rdd的分区数量分析
 
-
 通过parallelize的方式比较简单，相信也是大部分初学者第一次接触创建rdd的方法，那么通过这个方法创建的rdd的默认分区数是多少呢？我们通过源码进行分析。
 
 ```scala
@@ -33,7 +32,7 @@ class SparkContext(config: SparkConf) extends Logging {
 }
 ```
 
-我们先看看parallelize是如何生成rdd的。可以看到它是通过 ParallelCollectionRDD 类创建一个rdd，其内部返回的patitioner是通过ParallelCollectionRDD伴生对象的slice方法分割seq为一个二维的Seq[Seq[T]]，并把这个二维的序列传递到ParallelCollectionPartition中实例化的。
+我们先看看parallelize是如何生成rdd的。可以看到它是通过 ParallelCollectionRDD 类创建一个rdd，其内部返回的partitioner是通过ParallelCollectionRDD伴生对象的slice方法分割seq为一个二维的Seq[Seq[T]]，并把这个二维的序列传递到ParallelCollectionPartition中实例化的。
 
 接下来是关键，`defaultParallelism`的默认值确定了分区的数量。
 
@@ -170,11 +169,11 @@ private[spark] class MapPartitionsRDD[U: ClassTag, T: ClassTag](
 }
 ```
 
-这里需要注意区分Partitioner和Partition。Partitioner是分区器，需要定义分区的数量numPartitions，以及通过传入key决定其在哪个partition的getPartition(key: Any)方法。而Partition是Partitioner的分区结果，代表一个rdd目前的分区状态。当然rdd也可以没有Partitioner就有Parition的情况，如默认情况下经过map转换的rdd，本文第一部分描述通过parallelize创建rdd，都是没有partitioner，其的paritioner为None。
+这里需要注意区分Partitioner和Partition。Partitioner是分区器，需要定义分区的数量numPartitions，以及通过传入key决定其在哪个partition的getPartition(key: Any)方法。而Partition则描述了当前rdd每个partition与parent rdd之间的依赖关系，或者当前的分区状态。当然rdd也可以没有Partitioner就有Parition的情况，如默认情况下经过map转换的rdd，以及本文第一部分描述通过parallelize创建rdd，都是没有partitioner，其的paritioner为None。
 
 回到map的paritions数量为多少的问题，从源码中也能看到其parittions将保持血统中最早的父类的partition，不会改变原有的分区情况。但是也不会保留原有的分区器。
 
-而类似的，flatMap的实现也和map一致。filter也差不多，只是其preservesPartitioning为true，保留了血统中最早父类的partitioner。
+而类似的，flatMap的实现也和map一致。filter也差不多，由于其不会更改父rdd的key，所以preservesPartitioning为true，保留了血统中最早父类的partitioner。
 
 ### 以reduceByKey()为例
 
@@ -286,7 +285,6 @@ object Partitioner {
 
 defaultPartitioner()的决定分区器规则总结如下：
 
-- 对于通过defaultPartitioner确定paritioner的API，其返回的partitioner的分区数量如下：
 - defaultNumPartitions = "spark.default.parallelism" ，如果未定义则等于所有rdd分区中最大的分区数
 - 如果在所有rdd中有对应的paritioner，则选出分区数量最大的paritioner，并且该paritioner的分区数满足以下两个条件之一，则返回该paritioner作为API的paritioner
 	- 分区数量是合理的
@@ -298,6 +296,9 @@ defaultPartitioner()的决定分区器规则总结如下：
 - 等于默认值spark.default.parallelism
 - 等于所有rdd中最大partition数量
 
+## 参考
+
+[https://github.com/rohgar/scala-spark-4/wiki/Partitioning](https://github.com/rohgar/scala-spark-4/wiki/Partitioning)
 
 > TODO 通过文件创建rdd还未考虑，以后有时间加进来  
 > 本文为学习过程中产生的总结，由于学艺不精可能有些观点或者描述有误，还望各位同学帮忙指正，共同进步。
