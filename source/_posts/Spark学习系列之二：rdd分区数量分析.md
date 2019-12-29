@@ -296,6 +296,27 @@ defaultPartitioner()的决定分区器规则总结如下：
 - 等于默认值spark.default.parallelism
 - 等于所有rdd中最大partition数量
 
+## 保存partitioner的transfermation
+
+如上所述，rdd的parittioner是决定分区数量的重要因素，对于以下transfermation__默认__将会保留和传播partitioner: 
+
+- cogroup
+- groupWith
+- join
+- leftOuterJoin
+- rightOuterJoin
+- groupByKey
+- reduceByKey
+- foldByKey
+- combineByKey
+- partitionBy
+- sort
+- mapValues 
+- flatMapValues 
+- filter 
+
+其他transfermation将默认不保持分区器。因为其他操作可能会修改key，修改了key后，原来的分区器就失去了它的意义。相反的，mapValues只修改value不修改key，所以其保留和传播分区器是合理的。
+
 ## 参考
 
 [https://github.com/rohgar/scala-spark-4/wiki/Partitioning](https://github.com/rohgar/scala-spark-4/wiki/Partitioning)
