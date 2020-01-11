@@ -136,7 +136,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
 	- 如果没有定义`spark.default.parallelism`，则以解析master参数中指定的值为分区大小
 - 如果部署模式为standalone：
 	- 如果定义了`spark.default.parallelism`则以其值作为分区大小
-	- 如果没有定义`spark.default.parallelism`，math.max(totalCoreCount, 2)，其中totalCoreCount为executor注册的所拥有core数量，不一定是申请core的总数。
+	- 如果没有定义`spark.default.parallelism`，则为math.max(totalCoreCount, 2)，其中totalCoreCount为executor注册的所拥有core数量，不一定是申请core的总数。
 
 > TODO yarn模式的还未考虑，以后有时间加进来
 
@@ -157,10 +157,10 @@ private[spark] class MapPartitionsRDD[U: ClassTag, T: ClassTag](
     isOrderSensitive: Boolean = false)
   extends RDD[U](prev) {
   
-  // 分区器继承血统中最早父类的partitioner，如果有的话
+  // 分区器继承血统中第一个父类的partitioner（对于map来说只有一个父rdd），如果有的话
   override val partitioner = if (preservesPartitioning) firstParent[T].partitioner else None
 
-  // 分区继承血统中最早父类的partitions
+  // 分区继承血统中第一个父类的partitions（对于map来说只有一个父rdd）
   override def getPartitions: Array[Partition] = firstParent[T].partitions
 
   override def compute(split: Partition, context: TaskContext): Iterator[U] =
@@ -169,11 +169,11 @@ private[spark] class MapPartitionsRDD[U: ClassTag, T: ClassTag](
 }
 ```
 
-这里需要注意区分Partitioner和Partition。Partitioner是分区器，需要定义分区的数量numPartitions，以及通过传入key决定其在哪个partition的getPartition(key: Any)方法。而Partition则描述了当前rdd每个partition与parent rdd之间的依赖关系，或者当前的分区状态。当然rdd也可以没有Partitioner就有Parition的情况，如默认情况下经过map转换的rdd，以及本文第一部分描述通过parallelize创建rdd，都是没有partitioner，其的paritioner为None。
+这里需要注意区分Partitioner和Partition。Partitioner是分区器，需要定义分区的数量numPartitions，以及通过传入key决定其在哪个partition的getPartition(key: Any)方法。而Partition则描述了当前rdd每个partition与parent rdd之间的依赖关系，或者当前的分区状态。当然rdd也可以没有Partitioner就有Parition的情况，如默认情况下经过map转换的rdd，以及本文第一部分描述通过parallelize创建rdd，都是没有partitioner，其partitioner为None。
 
-回到map的paritions数量为多少的问题，从源码中也能看到其parittions将保持血统中最早的父类的partition，不会改变原有的分区情况。但是也不会保留原有的分区器。
+回到map的paritions数量为多少的问题，从源码中也能看到其parittions将保持血统中第一个的父类的partition，不会改变原有的分区情况。但是也不会保留原有的分区器。
 
-而类似的，flatMap的实现也和map一致。filter也差不多，由于其不会更改父rdd的key，所以preservesPartitioning为true，保留了血统中最早父类的partitioner。
+而类似的，flatMap的实现也和map一致。filter也差不多，由于其不会更改父rdd的key，所以preservesPartitioning为true，保留了血统中第一个父类的partitioner。
 
 ### 以reduceByKey()为例
 
@@ -255,7 +255,7 @@ object Partitioner {
     // than the default number of partitions, use the existing partitioner.
     if (hasMaxPartitioner.nonEmpty && (isEligiblePartitioner(hasMaxPartitioner.get, rdds) ||
         defaultNumPartitions < hasMaxPartitioner.get.getNumPartitions)) {
-      // 如果有最大分区器rdd，并且其分区数是合理的；或者有最大分区器rdd，并且其分区数量大于默认的分区数量defaultNumPartitions；返回最大分区器rdd的paritioner
+      // 如果有最大分区器rdd，并且其分区数是合理的；或者有最大分区器rdd，并且其分区数量大于默认的分区数量defaultNumPartitions；返回最大分区器rdd的partitioner
       hasMaxPartitioner.get.partitioner.get
     } else {
       // 否则将以默认分区数量defaultNumPartitions实例化一个HashPartitioner，并返回
@@ -286,7 +286,7 @@ object Partitioner {
 defaultPartitioner()的决定分区器规则总结如下：
 
 - defaultNumPartitions = "spark.default.parallelism" ，如果未定义则等于所有rdd分区中最大的分区数
-- 如果在所有rdd中有对应的paritioner，则选出分区数量最大的paritioner，并且该paritioner的分区数满足以下两个条件之一，则返回该paritioner作为API的paritioner
+- 如果在所有rdd中有对应的partitioner，则选出分区数量最大的partitioner，并且该partitioner的分区数满足以下两个条件之一，则返回该partitioner作为API的partitioner
 	- 分区数量是合理的
 	- 分区数量大于defaultNumPartitions
 - 否则，返回HashPartitioner(defaultNumPartitions)
@@ -296,9 +296,9 @@ defaultPartitioner()的决定分区器规则总结如下：
 - 等于默认值spark.default.parallelism
 - 等于所有rdd中最大partition数量
 
-## 保存partitioner的transfermation
+## 保持partitioner的transformation
 
-如上所述，rdd的parittioner是决定分区数量的重要因素，对于以下transfermation__默认__将会保留和传播partitioner: 
+如上所述，rdd的parittioner是决定分区数量的重要因素，对于以下transformation __默认__ 将会保留和传播partitioner: 
 
 - cogroup
 - groupWith
@@ -310,12 +310,11 @@ defaultPartitioner()的决定分区器规则总结如下：
 - foldByKey
 - combineByKey
 - partitionBy
-- sort
 - mapValues 
 - flatMapValues 
 - filter 
 
-其他transfermation将默认不保持分区器。因为其他操作可能会修改key，修改了key后，原来的分区器就失去了它的意义。相反的，mapValues只修改value不修改key，所以其保留和传播分区器是合理的。
+其他transfermation将默认不保持分区器。因为其他操作（比如map）可能会修改key，修改了key后，原来的分区器就失去了它的意义。相反的，mapValues只修改value不修改key，所以其保留和传播分区器是合理的。
 
 ## 参考
 
