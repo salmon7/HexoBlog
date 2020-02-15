@@ -12,14 +12,16 @@ tags:
 
 这个demo看似简单，但是作为一个新手，我也遇到了一些看起来比较奇怪的问题。再此总结一下我遇到的一些问题，希望能给遇到同样问题的人带来一些帮助。
 
+## 问题一：spark的并行度是多少？
+
 我相信一开始接触的初学者对此肯定有疑惑，并行度指的什么？我认为在spark中，这个并行度指的是partition的数量，无论是通过parallelize初始化rdd，还是通过join和reduceByKey等shuffle操作，都意味着需要确定这个新rdd的paritition数量。这里涉及到一个参数`spark.default.parallelism`，该参数__大多数情况下__是parallelize、join、reducdeByKey等操作的__默认__并行度。如果不定义这个参数，默认情况下分区数量在不同情景的情况下有所不同：
 
-- 对于join和reduceByKey等shuffl操作，分区数一般为多个父rdd中partition数目最大的一个。
+- 对于join和reduceByKey等shuffle操作，分区数一般为多个父rdd中partition数目最大的一个。
 - 对于parallelize进行初始化操作，分区数在不同部署模式下不同：
 	- local[*]：本地cpu的core数量，local[N]则为N，local则为1
 	- meos：默认为8
 	- other：一般为executor个数 * 每个executor的core个数
-- 当然如果定义了`spark.default.parallelism`参数，其默认分区数也不一定是其值，具体分析见[Spark学习系列之二：rdd分区数量分析](/2019/12/22/Spark学习系列之二：rdd分区数量分析.html)。实际api中也能通过传递numPartitions参数覆盖。`spark.default.parallelism`，自行决定并行度。
+- 当然如果定义了`spark.default.parallelism`参数，其默认分区数也不一定是其值，具体分析见[Spark学习系列之二：rdd分区数量分析](/2019/12/22/Spark学习系列之二：rdd分区数量分析.html)。实际api中也能通过传递numPartitions参数覆盖`spark.default.parallelism`，自行决定并行度。
 - 比如正在使用的mac是四核，假设向yarn申请executor个数为2，每个executor的core数量为1，那么spark.default.parallelism的值为2，这时一般情况下是不能充分利用其申请核数资源的，最好是申请核数的2~3倍。可以通过 --conf 传入参数 `--conf spark.default.parallelism = 4` 或者 `--conf spark.default.parallelism = 6`，使其默认值为申请核数的2~3倍。如果有的task执行比较快，core就空闲出来了，为了多利用core就设置task数量为2~3倍。当然最后的并行度还需要根据实际情况进行分析。
 
 > 如何确定本机核数？通过local[*]模式进行parallelize初始化rdd，再输出myrdd.partitions.size即可得，也可以通过java代码Runtime.getRuntime.availableProcessors()获得

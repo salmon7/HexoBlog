@@ -156,6 +156,7 @@ private[spark] class MapPartitionsRDD[U: ClassTag, T: ClassTag](
     preservesPartitioning: Boolean = false,
     isOrderSensitive: Boolean = false)
   extends RDD[U](prev) {
+  // 这里需要注意，实例化MapPartitionsRDD时，会调用RDD的单参数rdd的构造方法。
   
   // 分区器继承血统中第一个父类的partitioner（对于map来说只有一个父rdd），如果有的话
   override val partitioner = if (preservesPartitioning) firstParent[T].partitioner else None
@@ -167,11 +168,51 @@ private[spark] class MapPartitionsRDD[U: ClassTag, T: ClassTag](
     f(context, split.index, firstParent[T].iterator(split, context))
   
 }
+
+abstract class RDD[T: ClassTag](
+    @transient private var _sc: SparkContext,
+    @transient private var deps: Seq[Dependency[_]]
+  ) extends Serializable with Logging {
+
+  /** Construct an RDD with just a one-to-one dependency on one parent */
+  // 实现单参数rdd的构造方法
+  def this(@transient oneParent: RDD[_]) =
+    this(oneParent.context, List(new OneToOneDependency(oneParent)))
+
+  /**
+   * Implemented by subclasses to return how this RDD depends on parent RDDs. This method will only
+   * be called once, so it is safe to implement a time-consuming computation in it.
+   */
+  // getDependencies等于rdd构造方法参数中的deps
+  protected def getDependencies: Seq[Dependency[_]] = deps
+
+  /**
+   * Get the list of dependencies of this RDD, taking into account whether the
+   * RDD is checkpointed or not.
+   */
+  final def dependencies: Seq[Dependency[_]] = {
+    checkpointRDD.map(r => List(new OneToOneDependency(r))).getOrElse {
+      if (dependencies_ == null) {
+        // 先不考虑checkpoint的情况，则dependencies= dependencies_ = getDependencies
+        dependencies_ = getDependencies
+      }
+      dependencies_
+    }
+  }
+  
+  /** Returns the first parent RDD */
+  protected[spark] def firstParent[U: ClassTag]: RDD[U] = {
+    // firstParent为dependencies容器中第一个元素
+    dependencies.head.rdd.asInstanceOf[RDD[U]]
+  }
+}
 ```
 
-这里需要注意区分Partitioner和Partition。Partitioner是分区器，需要定义分区的数量numPartitions，以及通过传入key决定其在哪个partition的getPartition(key: Any)方法。而Partition则描述了当前rdd每个partition与parent rdd之间的依赖关系，或者当前的分区状态。当然rdd也可以没有Partitioner就有Parition的情况，如默认情况下经过map转换的rdd，以及本文第一部分描述通过parallelize创建rdd，都是没有partitioner，其partitioner为None。
+这里需要注意区分Partitioner和Partition。Partitioner是分区器，需要定义分区的数量numPartitions，以及通过传入key决定其在哪个partition的getPartition(key: Any)方法。而Partition则描述了当前rdd的分区状态，对于map而言其分区状态和父rdd一致。当然rdd也可以没有Partitioner就有Parition的情况，如默认情况下经过map转换的rdd，以及本文第一部分描述通过parallelize创建rdd，都是没有partitioner，其partitioner为None。
 
-回到map的paritions数量为多少的问题，从源码中也能看到其parittions将保持血统中第一个的父类的partition，不会改变原有的分区情况。但是也不会保留原有的分区器。
+通过追溯firstParent，可知firstParent <- dependencies.head <- dependencies_.head <- getDependencies.head <- deps.head <- List(new OneToOneDependency(pre).head (这里完成rdd到dependency的转换)，其中pre为调用map方法的rdd，即 MapPartitionsRDD 的父rdd。
+
+回到map的paritions数量为多少的问题，从源码中也能看到其partitions将保持血统中第一个的父类的partition，不会改变原有的分区情况。但是也不会保留原有的分区器。
 
 而类似的，flatMap的实现也和map一致。filter也差不多，由于其不会更改父rdd的key，所以preservesPartitioning为true，保留了血统中第一个父类的partitioner。
 
@@ -256,6 +297,7 @@ object Partitioner {
     if (hasMaxPartitioner.nonEmpty && (isEligiblePartitioner(hasMaxPartitioner.get, rdds) ||
         defaultNumPartitions < hasMaxPartitioner.get.getNumPartitions)) {
       // 如果有最大分区器rdd，并且其分区数是合理的；或者有最大分区器rdd，并且其分区数量大于默认的分区数量defaultNumPartitions；返回最大分区器rdd的partitioner
+      // 这个if-else语句嵌套到上一个if-else语句的话，代码会更加清晰？
       hasMaxPartitioner.get.partitioner.get
     } else {
       // 否则将以默认分区数量defaultNumPartitions实例化一个HashPartitioner，并返回
@@ -274,7 +316,7 @@ object Partitioner {
      rdds: Seq[RDD[_]]): Boolean = {
     // 获取rdds序列中最大的分区数量
     val maxPartitions = rdds.map(_.partitions.length).max
-    // 如果rdds序列中最大的分区数量和最大分区器的rdd在同一个数量级，则返回true；否则返回false
+    // 如果rdds序列中最大的分区数量不大于最大分区器分区数量一个数量级，则返回true；否则返回false
     log10(maxPartitions) - log10(hasMaxPartitioner.getNumPartitions) < 1
   }
 }
@@ -285,16 +327,28 @@ object Partitioner {
 
 defaultPartitioner()的决定分区器规则总结如下：
 
-- defaultNumPartitions = "spark.default.parallelism" ，如果未定义则等于所有rdd分区中最大的分区数
+- 如果定义了"spark.default.parallelism"，则defaultNumPartitions = "spark.default.parallelism" ；如果未定义，则defaultNumPartitions等于所有rdd分区中最大的分区数
 - 如果在所有rdd中有对应的partitioner，则选出分区数量最大的partitioner，并且该partitioner的分区数满足以下两个条件之一，则返回该partitioner作为API的partitioner
 	- 分区数量是合理的
 	- 分区数量大于defaultNumPartitions
 - 否则，返回HashPartitioner(defaultNumPartitions)
 
-总结，对于reduceByKey等类似的API而言，其分区数量有两种情况：
+总结，对于reduceByKey等类似的API而言，只要是通过defaultPartitioner()定义分区器的，其分区数量有两种情况：
 
 - 等于默认值spark.default.parallelism
 - 等于所有rdd中最大partition数量
+
+也可以看出此类型的转换，partition数量总是趋向于变大，而"spark.default.parallelism"是个平衡点。
+
+如果定义了"spark.default.parallelism"：
+
+- 如果它定义的很小，对于没有分区器则分区数量很小。对于有分区器，defaultNumPartitions < hasMaxPartitioner.get.getNumPartitions几乎永远为true，将保持最大分区器的分区数量，不会主动干预原来的分区情况。
+- 如果它定义的很大，对于没有分区器则分区数量很大。对于有分区器，defaultNumPartitions < hasMaxPartitioner.get.getNumPartitions几乎永远为false，结果依赖于最大分区器的分区数量小于分区数量最大的rdd的程度，如果相差不大则保留原来的分区器，如果相差很大，则以"spark.default.parallelism"作为新分区大小。
+
+如果没定义"spark.default.parallelism"：
+
+- 对于没有分区器，则分区数量等于所有rdd中最大partition数量。
+- 对于有分区器，defaultNumPartitions < hasMaxPartitioner.get.getNumPartitions永远为false，结果依赖于最大分区器的分区数小于分区数量最大的rdd的程度，如果相差不大则保留原来的分区器，如果相差很大，则以所有rdd的最大分区数为新分区大小。
 
 ## 保持partitioner的transformation
 
