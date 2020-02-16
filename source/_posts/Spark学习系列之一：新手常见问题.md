@@ -8,7 +8,7 @@ tags:
 
 > 如无特别说明，本文源码版本为 spark 2.3.4
 
-学习spark有一段时间了，最近想动动手写个demo出来，大致的功能是从kafka读取用户点击记录，用spark streaming对这些数据进行读取并统计用户一段时间的点击记录，期望最后能落盘到redis中供需求方调用。
+学习spark有一段时间了，最近想动动手写个[demo](https://github.com/salmon7/spark-and-scala-learning)出来，大致的功能是从kafka读取用户点击记录，用spark streaming对这些数据进行读取并统计用户一段时间的点击记录，期望最后能落盘到redis中供需求方调用。
 
 这个demo看似简单，但是作为一个新手，我也遇到了一些看起来比较奇怪的问题。再此总结一下我遇到的一些问题，希望能给遇到同样问题的人带来一些帮助。
 
@@ -125,7 +125,7 @@ Capacity Scheduler | [MEMORY, CPU] | <memory:1024, vCores:1> | <memory:8192, vCo
 [How-to: Tune Your Apache Spark Jobs (Part 2)](https://blog.cloudera.com/how-to-tune-your-apache-spark-jobs-part-2/)
 
 
-## 问题四：spark sterming的checkpoint
+## 问题四：spark streaming的checkpoint
 
 spark streaming的checkpoint数据包含两种，第一种是元数据，包括配置、DStream的操作链、未完成的批次，这些主要是用来重启driver；第二种是rdd，一般对于无状态的rdd其实可以不用checkpoint，当然这样子可能会造成已接收但未处理的数据丢失，而对于__跨批次有状态__的rdd需要记忆之前的状态，同时也为了避免rdd血统过长导致存储空间过大，需要定时进行checkpoint。
 
@@ -210,7 +210,7 @@ private[streaming] def remember(duration: Duration) {
 在网上找了挺多资料，挺多人遇到同样的问题，也看了部分reduceByKeyAndWindow的源码，最后发现是spark实现的一个bug，只要升到2.4.0版本就不会与这个问题。
 
 > 这个问题其实花了挺长时间去找问题的原因，也试过先cache或checkpoint，但是依然无法解决这个问题。源码实现方面，reduceByKeyAndWindow的底层流实现为ReducedWindowedDStream，里面分析了previous window、current window、new rdd、old rdd等等，对old rdd运行invReduceFunc，对new rdd运行reduceFunc。    
-> 最终有人重写了kafka consumer解决了此问题，详见githu的pr [Avoid concurrent use of cached consumers in CachedKafkaConsumer](https://github.com/apache/spark/pull/20997)，核心是避免使用同时一个consumer读取TopicPartition。
+> 最终有人重写了kafka consumer解决了此问题，详见github的pr [Avoid concurrent use of cached consumers in CachedKafkaConsumer](https://github.com/apache/spark/pull/20997)，核心是避免使用同时一个consumer读取TopicPartition。
 
 参考：  
 [2.4.0修复bug](https://issues.apache.org/jira/browse/SPARK-23636)  
