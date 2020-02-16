@@ -333,10 +333,11 @@ defaultPartitioner()的决定分区器规则总结如下：
 	- 分区数量大于defaultNumPartitions
 - 否则，返回HashPartitioner(defaultNumPartitions)
 
-总结，对于reduceByKey等类似的API而言，只要是通过defaultPartitioner()定义分区器的，其分区数量有两种情况：
+总结，对于reduceByKey等类似的API而言，只要是通过defaultPartitioner()定义分区器的，其分区数量有三种情况：
 
 - 等于默认值spark.default.parallelism
 - 等于所有rdd中最大partition数量
+- 等于所有partitioner中最大partition数量
 
 也可以看出此类型的转换，partition数量总是趋向于变大，而"spark.default.parallelism"是个平衡点。
 

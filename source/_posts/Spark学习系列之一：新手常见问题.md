@@ -137,8 +137,8 @@ spark streaming的checkpoint数据包含两种，第一种是元数据，包括�
 
 - 除了定时checkpoint外，还需要定时清理保存的数据
     - 这个周期一般为checkpoint间隔的两倍，Remember Duartion = checkpoint\_interval * 2
-    - 如果其上游有额外进行checkpoint的话，那么该值应该等于其最近上游的remember duration * 2 和 当前checkpoint inteval * 2的最大值
-    - 即Remember Duartion = max( father.checkpoint\_interval, checkpoint\_interval) * 2
+    - 如果其下游有额外进行checkpoint的话，那么该值应该等于其最近下游的remember duration \* 2 和 当前checkpoint inteval * 2的最大值
+    - 即Remember Duartion = max( children.checkpoint\_interval, checkpoint\_interval) * 2
     - `DStream.scala` 关键源码如下。可以看出，当不主动设置DStream的remember duration时，其大小为checkpoint interval的两倍。同时还会递归地为父stream设置remember duration如果子类的比父类本身remember duration大。
 
 ```scala
@@ -176,25 +176,25 @@ private[streaming] def remember(duration: Duration) {
 
 ```
 	
-- 假设BatchInterval=10s，在DAG图中有 A->B->C，A为DirectKafkaInputDStream，B为MappedDStream，其中C为StateDStream。
+- 假设BatchInterval=10s，在DAG图中有 A->B->C，A为DirectKafkaInputDStream，B为MappedDStream，C为StateDStream。
     - 默认情况下，只有StateDStream会进行checkpoint：
-    	- DirectKafkaInputDStream：checkpoint interval = N/A ，remember duration = 20s
-    	- MappedDStream：checkpoint interval = N/A ，remember duration = 20s
-       - StateDStream：checkpoint interval = 10s ，remember duration = 20s
+      - DirectKafkaInputDStream：checkpoint interval = N/A ，remember duration = 20s
+      - MappedDStream：checkpoint interval = N/A ，remember duration = 20s
+      - StateDStream：checkpoint interval = 10s ，remember duration = 20s
     - 如果对MappedDStream进行了checkpoint，即 MappedDStream.checkpoint(Seconds(20))
     	- DirectKafkaInputDStream：checkpoint interval = N/A ，remember duration = 40s      
-       - MappedDStream：checkpoint interval = 20s ，remember duration = 40s
-       - StateDStream：checkpoint interval = 10s ，remember duration = 20s
+      - MappedDStream：checkpoint interval = 20s ，remember duration = 40s
+      - StateDStream：checkpoint interval = 10s ，remember duration = 20s
 
     - BatchInterval = 5s，如果对MappedDStream进行了checkpoint，即 MappedDStream.checkpoint(Seconds(5))
-        - DirectKafkaInputDStream：checkpoint interval = N/A ，remember duration = 20s
-        - MappedDStream：checkpoint interval = 5s ，remember duration = 20s
-        - StateDStream：checkpoint interval = 10s ，remember duration = 20s
+      - DirectKafkaInputDStream：checkpoint interval = N/A ，remember duration = 20s
+      - MappedDStream：checkpoint interval = 5s ，remember duration = 20s
+      - StateDStream：checkpoint interval = 10s ，remember duration = 20s
 
     - 如果对DirectKafkaInputDStream进行了checkpoint，即 DirectKafkaInputDStream.checkpoint(Seconds(30))
-        - DirectKafkaInputDStream：checkpoint interval = 30s，remember duration = 60s        
-        - MappedDStream：checkpoint interval = N/A ，remember duration = 20s
-        - StateDStream：checkpoint interval = 10s ，remember duration = 20s
+      - DirectKafkaInputDStream：checkpoint interval = 30s，remember duration = 60s        
+      - MappedDStream：checkpoint interval = N/A ，remember duration = 20s
+      - StateDStream：checkpoint interval = 10s ，remember duration = 20s
 
     - 这也为我们提供了一种调优策略，如果上游dstream设置的checkpoint间隔很短，但是占用内存很大，而下游dstream设置的checkpoint间隔很长，但是占用的内存很小。这个时候可以会以为设置上游checkpoint间隔短点，可以使其remember duration小一点，尽快清理占用的大量内存，但是很可能忽略了可能会使用下游的remember duration作为上游的remember duration，从而导致大量内存没有被释放。（当然，对于大内存也不应该频繁的进行checkpoint，这里只是举个例子说明可能出现的问题）
 
