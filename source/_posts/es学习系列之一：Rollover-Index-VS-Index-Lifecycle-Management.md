@@ -205,9 +205,9 @@ PUT /%3Cnginx_log-%7Bnow%2Fd%7D-000001%3E
 }
 
 # 写入11个doc，最多等待10分钟机会索引就会被rollover
-# 1.等待10分钟后可以发 nginx_log-2020.05.17-000002 的索引被创建
-# 2.创建了索引shrink-nginx_log-2020.05.21-000001，hard被shrink为1个，并删除原来的索引 nginx_log-2020.05.17-000001 
-# 3.创建别名nginx_log-2020.05.21-000001指向索引shrink-nginx_log-2020.05.21-00000
+# 1.等待10分钟后可以发现 nginx_log-2020.05.17-000002 的索引被创建
+# 2.创建了索引shrink-nginx_log-2020.05.21-000001，shard被shrink为1个，并删除原来的索引 nginx_log-2020.05.17-000001 
+# 3.创建别名nginx_log-2020.05.21-000001指向索引shrink-nginx_log-2020.05.21-000001
 POST nginx_log_write/_doc
 {
   "log":"something 01"
