@@ -223,19 +223,31 @@ PUT _cluster/settings
 
 ```
 
-使用 IDM 的注意点：
+使用 ILM 的注意点：
 
 - 创建索引时，设置alias需要指定`"is_write_index": true`
 - 在设置index template时，在特settings中的 `"index.lifecycle.rollover_alias"` 设置的别名要和创建索引时指定的别名一致。
-- index template中的 routing.allocation.${condiction} 最好和 IDM 中allocate指定的一致（即同时使用require，或者同时使用include）。因为这样才不会导致旧索引无法被已到新节点。比如index template指定 **include** hot，IDM warm中allocate中指定 **require** warm，那么在hot阶段rollover后进入到warm阶段的allocate，可能会导致将会无法移动索引，因为无法找到一个节点同时满足hot和warm节点。但是如果同时为include或者require，则IDM时会覆盖template设置的条件，索引可以成功移动。
+- index template中的 routing.allocation.${condiction} 最好和 ILM 中allocate指定的一致（即同时使用require，或者同时使用include）。因为这样才不会导致旧索引无法被已到新节点。比如index template指定 **include** hot，ILM warm中allocate中指定 **require** warm，那么在hot阶段rollover后进入到warm阶段的allocate，可能会导致将会无法移动索引，因为无法找到一个节点同时满足hot和warm节点。但是如果同时为include或者require，则ILM时会覆盖template设置的条件，索引可以成功移动。
 
 ### Rollover Index VS. Index Lifecycle Management
 
 |  | 自动调用 | alias必须设置为write模式 | alias名称限定 | 支持时间序列索引 | 支持移动索引 |
 | :----: | :----: | :----: | :----: | :----: | :----: |
 | Rollover Index | 否 | 可选 | 否 | 是 | 否 |
-| Index Lifecycle Management | 是，间隔为 indices.lifecycle.poll_interval | 是 | 需要和"index.lifecycle.rollover_alias"同名 | 是 | 是，需要注意index template中和IDM中使用同等类型的限制 | 
+| Index Lifecycle Management | 是，间隔为 indices.lifecycle.poll_interval | 是 | 需要和"index.lifecycle.rollover_alias"同名 | 是 | 是，需要注意index template中和ILM中使用同等类型的限制 | 
 
+
+### ILM min_age vs. rollover max_age
+
+我们需要对索引声明周期中的 min_age 和 rollover 中的 max_age做一下区分。我们知道，除了直接的rollover接口外，其实ILM中也是存在rollover的，如上所述它存在三个条件，包括 max_size, max_docs, max_age，其中 max_age 针对的是索引的 __创建时间__。  
+ILM的各个phase之间存在间隔，它通过min_age定义，比如上面的1小时以及2小时，它针对的是索引的 __创建时间__ 或者 __rollover时间__。如果上个phase的index不是rollover来的，那么它指的是索引创建时间；否则，它指的是rollover时间（比如在没有hot phase不则rollover，那么在warm定义的min_age意义为索引创建时间）。
+官方文档也有详细的解释：
+
+>https://www.elastic.co/guide/en/elasticsearch/reference/7.2/using-policies-rollover.html
+> Once an index rolls over, index lifecycle management uses the timestamp of the rollover operation rather than the index creation time to evaluate when to move the index to the next phase. For indices that have rolled over, the min_age criteria specified for a phase is relative to the rollover time for indices. In this example, that means the index will be deleted 30 days after rollover, not 30 days from when the index was created.
+
+>https://www.elastic.co/guide/en/elasticsearch/reference/7.2/_timing.html
+>min_age is usually the time elapsed from the time the index is created. If the index is rolled over, then min_age is the time elapsed from the time the index is rolled over. The intention here is to execute following phases and actions relative to when data was written last to a rolled over index.
 
 参考：  
 [Rollover index API](https://www.elastic.co/guide/en/elasticsearch/reference/7.6/indices-rollover-index.html)   
