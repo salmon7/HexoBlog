@@ -22,7 +22,7 @@ if [[ ! -d "$PUBLISH_REPO_DIR/.git" ]]; then
 fi
 
 echo "[4/6] 同步生成文件到发布仓库..."
-rsync -a --delete "$ROOT_DIR/public/" "$PUBLISH_REPO_DIR/"
+rsync -a --delete --exclude '.git/' "$ROOT_DIR/public/" "$PUBLISH_REPO_DIR/"
 
 echo "[5/6] 提交并推送到 salmon7.github.io..."
 cd "$PUBLISH_REPO_DIR"
