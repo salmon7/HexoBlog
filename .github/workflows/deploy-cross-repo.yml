@@ -1,0 +1,60 @@
+name: Deploy Hexo to salmon7.github.io
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'source/**'
+      - 'scaffolds/**'
+      - '_config.yml'
+      - '_config.next.yml'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/deploy-cross-repo.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-hexo-site
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build static site
+        run: npx hexo clean && npx hexo generate
+
+      - name: Verify CNAME
+        run: |
+          test -f public/CNAME
+          grep -qx 'blog.zhang7long.com' public/CNAME
+
+      - name: Publish to salmon7.github.io
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          deploy_key: ${{ secrets.PUBLISH_DEPLOY_KEY }}
+          external_repository: salmon7/salmon7.github.io
+          publish_branch: master
+          publish_dir: ./public
+          force_orphan: false
+          keep_files: false
+          user_name: github-actions[bot]
+          user_email: github-actions[bot]@users.noreply.github.com
+          commit_message: "Site updated from HexoBlog: ${{ github.sha }}"
