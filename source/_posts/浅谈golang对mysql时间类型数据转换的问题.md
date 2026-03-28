@@ -152,7 +152,7 @@ github.com/go-sql-driver/mysql/connection.go : mysqlConn.Exec() --> mysqlConn.in
 
 它对time.Time类型的变量会经过如下截图逻辑。可以看到golang对于time.Time类型，只会对其时区时间转为字符串，丢弃其时区信息，然后拼接到sql字符串中，所以golang存进数据库时区时间跟golang所在时区时间一致。 
 
-![golang存time.Time源码](golang存time.Time源码.png)
+{% asset_img golang存time.Time源码.png golang存time.Time源码 %}
 
 2.golang中取出mysql的date、datetime、timestamp映射到time.Time的分析：  
 跟踪golang运行sql的源码，发现在运行rows.Next()时会调用readRow()方法，其调用堆栈如下。
@@ -165,7 +165,7 @@ github.com/go-sql-driver/mysql/packets.go: textRows.readRow()
 
 对mysql的date、datetime、timestamp的变量经过如下逻辑。当程序发现其属于date、datetime、timestamp几种类型的一种时，就把其当成字符串进行解析，并且设置其时区为loc指定的时区。
 
-![golang取time.Time源码](golang取time.Time源码.png)
+{% asset_img golang取time.Time源码.png golang取time.Time源码 %}
 
 
 ## 四、总结

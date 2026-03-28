@@ -93,8 +93,8 @@ func main() {
 ### 3.分析tcp数据包
 
 通过wireshark打开lo.cap文件可以更加直观观察其交互情况，截图如下二图：
-![tcpdump1](./img/tcpdump1.png)
-![tcpdump2](./img/tcpdump2.png)
+{% asset_img tcpdump1.png tcpdump1 %}
+{% asset_img tcpdump2.png tcpdump2 %}
 
 可以看到10秒的第222号数据包中，mysql server发送的FIN信号并且收到了golang程序第223号的ack后，进入到tcp连接中FIN\_WAIT\_2状态，golang程序则进入到CLOSE_WAIT状态，此时mysql server不再接受任何查询请求。同时由于golang程序应用层无法感知mysql server关闭了连接，在11秒第224号的数据包中依然向mysql server发送了查询请求，mysql server应用层发现错误，直接返回重置连接。应用程序也打印出对应的日志。
 
