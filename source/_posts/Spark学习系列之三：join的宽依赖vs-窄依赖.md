@@ -11,7 +11,7 @@ tags:
 
 ## join transformation
 
-![narrow_wide_dependency.png](./Spark学习系列之三：join的宽依赖vs-窄依赖/narrow_wide_dependency.png)
+![narrow_wide_dependency.png](narrow_wide_dependency.png)
 
 以上图片是个经常用来解释宽窄依赖的经典图，来源于论文&lt;&lt;Resilient Distributed Datasets: A Fault-Tolerant Abstraction for In-Memory Cluster Computing&gt;&gt;。以下这段话也来自与该论文：
 

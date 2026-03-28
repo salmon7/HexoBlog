@@ -46,6 +46,46 @@ jobs:
           TZ: Asia/Shanghai
         run: npx hexo clean && npx hexo generate
 
+      - name: Verify referenced local images
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path, PurePosixPath
+          from urllib.parse import unquote
+          import re
+          import sys
+
+          public = Path('public')
+          pattern = re.compile(r'<img\b[^>]*\bsrc=["\']([^"\']+)["\']', re.IGNORECASE)
+          missing = []
+
+          for html in public.rglob('*.html'):
+              content = html.read_text(encoding='utf-8', errors='ignore')
+              for src in pattern.findall(content):
+                  if src.startswith(('http://', 'https://', '//', 'data:')):
+                      continue
+
+                  normalized = src.split('?', 1)[0].split('#', 1)[0]
+                  decoded = unquote(normalized)
+
+                  if decoded.startswith('/'):
+                      rel = decoded[1:]
+                  else:
+                      rel = str(PurePosixPath(html.relative_to(public).parent.as_posix()) / decoded)
+
+                  rel = PurePosixPath(rel).as_posix()
+                  target = public / rel
+                  if not target.exists():
+                      missing.append((html.as_posix(), src, rel))
+
+          if missing:
+              print('Found missing local image references:')
+              for html_file, src, resolved in missing:
+                  print(f'- {html_file}: src={src} -> public/{resolved}')
+              sys.exit(1)
+
+          print('All local image references in generated HTML are valid.')
+          PY
+
       - name: Verify CNAME
         run: |
           test -f public/CNAME
