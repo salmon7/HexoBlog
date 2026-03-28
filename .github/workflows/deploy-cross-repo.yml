@@ -32,6 +32,75 @@ jobs:
       - name: Checkout source repo
         uses: actions/checkout@v4
 
+      - name: Fast check changed post images
+        if: github.event_name == 'push'
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          from urllib.parse import unquote
+          import json
+          import re
+          import sys
+
+          event_path = Path('${{ github.event_path }}')
+          source_dir = Path('source')
+          posts_dir = source_dir / '_posts'
+
+          data = json.loads(event_path.read_text(encoding='utf-8'))
+          changed = set()
+          for commit in data.get('commits', []):
+              for key in ('added', 'modified'):
+                  for file_path in commit.get(key, []):
+                      if file_path.startswith('source/_posts/') and file_path.endswith('.md'):
+                          changed.add(file_path)
+
+          if not changed:
+              print('No changed post markdown files in push payload; skip fast image check.')
+              sys.exit(0)
+
+          md_image_pattern = re.compile(r'!\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)')
+          asset_img_pattern = re.compile(r'\{\%\s*asset_img\s+([^\s%]+)(?:\s+[^%]*)?\%\}')
+
+          missing = []
+
+          def is_external(ref: str) -> bool:
+              return ref.startswith(('http://', 'https://', '//', 'data:', '#'))
+
+          def normalize(ref: str) -> str:
+              return unquote(ref.split('?', 1)[0].split('#', 1)[0].strip())
+
+          for rel_path in sorted(changed):
+              md_file = Path(rel_path)
+              if not md_file.exists():
+                  continue
+
+              content = md_file.read_text(encoding='utf-8', errors='ignore')
+              post_name = md_file.stem
+              asset_dir = posts_dir / post_name
+
+              refs = list(md_image_pattern.findall(content)) + list(asset_img_pattern.findall(content))
+              for raw_ref in refs:
+                  ref = normalize(raw_ref)
+                  if not ref or is_external(ref):
+                      continue
+
+                  if ref.startswith('/'):
+                      candidates = [source_dir / ref.lstrip('/')]
+                  else:
+                      candidates = [asset_dir / ref]
+
+                  if not any(candidate.exists() for candidate in candidates):
+                      missing.append((md_file.as_posix(), raw_ref, [c.as_posix() for c in candidates]))
+
+          if missing:
+              print('Missing local images in changed posts:')
+              for md_path, raw_ref, candidates in missing:
+                  print(f'- {md_path}: ref={raw_ref} (checked: {", ".join(candidates)})')
+              sys.exit(1)
+
+          print('Fast changed-post image check passed.')
+          PY
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
